@@ -16,6 +16,8 @@ public class TripPoint {
     private static ArrayList<TripPoint> trip = new ArrayList<TripPoint>();
 	private static ArrayList<TripPoint> movingTrip = new ArrayList<TripPoint>();
 
+    private static int stops;
+
     //Constructor
     public TripPoint(int time, double lat, double lon) {
         this.lat = lat;
@@ -40,6 +42,7 @@ public class TripPoint {
     public int getTime() {
         return this.time;
     }
+    
     public static ArrayList<TripPoint> getTrip() {
         ArrayList<TripPoint> copiedList = new ArrayList<>();
 
@@ -54,54 +57,65 @@ public class TripPoint {
         return copiedList;
     }
 
-    public static void readFile(String fileName) throws FileNotFoundException{
+    public static void readFile(String filename) throws FileNotFoundException, IOException {
 
-        try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
-            // Skip the header row
-            br.readLine();
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(","); // split based on comma
-                if (parts.length >= 3) { // ensure line is formatted properly
-                    int time = Integer.parseInt(parts[0]); // assign values while parsing to correct values
-                    double latitude = Double.parseDouble(parts[1]);
-                    double longitude = Double.parseDouble(parts[2]);
-                    trip.add(new TripPoint(time, latitude, longitude)); // add to list
-                } else {
-                    System.err.println("Incorrect file formating at line: " + line); //error message if file formatted incorectly
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Error reading the file: " + e.getMessage()); // filename is wrong
-        } catch (NumberFormatException e) {
-            System.err.println("Error converting latitude/longitude to double: " + e.getMessage()); // lat or long is formatted inccorectly
-        }
-    }
+		// construct a file object for the file with the given name.
+		File file = new File(filename);
 
-    private static double EarthRadiusKm = 6371.0; // constant for radius of the Earth in kilometers
+		// construct a scanner to read the file.
+		Scanner fileScanner = new Scanner(file);
+		
+		// initiliaze trip
+		trip = new ArrayList<TripPoint>();
+
+		// create the Array that will store each lines data so we can grab the time, lat, and lon
+		String[] fileData = null;
+
+		// grab the next line
+		while (fileScanner.hasNextLine()) {
+			String line = fileScanner.nextLine();
+
+			// split each line along the commas
+			fileData = line.split(",");
+
+			// only write relevant lines
+			if (!line.contains("Time")) {
+				// fileData[0] corresponds to time, fileData[1] to lat, fileData[2] to lon
+				trip.add(new TripPoint(Integer.parseInt(fileData[0]), Double.parseDouble(fileData[1]), Double.parseDouble(fileData[2])));
+			}
+		}
+
+		// close scanner
+		fileScanner.close();
+	}
 
     public static double DegreesToRadians(double degrees) // convert from degree to radian for haversine formula
     {
         return degrees * Math.PI / 180.0;
     }
 
-    public static double haversineDistance(TripPoint a, TripPoint b)
+    public static double haversineDistance(TripPoint first, TripPoint second)
     {
-        double lat1 = DegreesToRadians(a.getLat()); // assign lats and lons to variables 
-        double lon1 = DegreesToRadians(a.getLon());
-        double lat2 = DegreesToRadians(b.getLat());
-        double lon2 = DegreesToRadians(b.getLon());
-
-        double deltaLat = lat2 - lat1; // change in lat
-        double deltaLon = lon2 - lon1; // change in lon
-
-        double c = Math.pow(Math.sin(deltaLat / 2), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(deltaLon / 2), 2); // formula p1
-
-        double d = 2 * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c)); // formula p2
-
-        double distance = EarthRadiusKm * d;
-
-        return distance;
+        double lat1 = first.getLat();
+		double lat2 = second.getLat();
+		double lon1 = first.getLon();
+		double lon2 = second.getLon();
+		
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+ 
+        // convert to radians
+        lat1 = Math.toRadians(lat1);
+        lat2 = Math.toRadians(lat2);
+ 
+        // apply formulae
+        double a = Math.pow(Math.sin(dLat / 2), 2) +
+                   Math.pow(Math.sin(dLon / 2), 2) *
+                   Math.cos(lat1) *
+                   Math.cos(lat2);
+        double rad = 6371;
+        double c = 2 * Math.asin(Math.sqrt(a));
+        return rad * c;
     }
 
     public static double totalDistance(){
@@ -147,86 +161,59 @@ public class TripPoint {
         return distance / (timeDifference / 60); // Calculate and return average speed
     }
 
-
 	public static int h1StopDetection(){
-		double buffer = 0.6; // threshold radius to determine moving or not
+		double displacementThreshold = 0.6; // Threshold in kilometers
+        movingTrip = new ArrayList<>(trip);
 
-		int stops = 0;
-
-		int tempIndex = -1;
-		boolean stopped = false;
-
-		movingTrip = new ArrayList<>(trip);
-
-		for(int i = 1; i < movingTrip.size(); i++){
-			if(!stopped){
-				if(haversineDistance(movingTrip.get(i - 1), movingTrip.get(i)) <= buffer){
-					stopped = true;
-					tempIndex = i;
-				}
-			}
-			if(stopped){
-				if(haversineDistance(movingTrip.get(tempIndex - 1), movingTrip.get(i)) <= buffer){
-					stops++;
-					movingTrip.remove(i);
-					i--;
-				}
-				else{
-					stopped = false;
-				}
-			}
-		}
-
-		return stops;
+        stops = 0;
+        for (int i = 1; i < trip.size(); i++) { // loop
+            TripPoint currentPoint = trip.get(i);
+            TripPoint previousPoint = trip.get(i - 1);
+            double distance = haversineDistance(currentPoint, previousPoint);
+            if (distance <= displacementThreshold) {
+                movingTrip.remove(currentPoint);
+                stops++;
+            }
+        }
+        return stops;
 	}
 
 	public static int h2StopDetection(){
-		double buffer = 1.72; // threshold radius to determine moving or not
+		double threshold = 0.5; // Threshold in kilometers
+        movingTrip = new ArrayList<>(trip);
 
-		int stops = 0;
+        stops = 0;
 
-		int tempIndex = -1;
-		boolean stopped = false;
-
-		movingTrip = new ArrayList<>(trip);
-
-		for(int i = 1; i < movingTrip.size(); i++){
-			if(!stopped){
-				if(haversineDistance(movingTrip.get(i - 1), movingTrip.get(i)) <= buffer){
-					stopped = true;
-					tempIndex = i;
-				}
-			}
-			if(stopped){
-				if(haversineDistance(movingTrip.get(tempIndex - 1), movingTrip.get(i)) <= buffer){
-					stops++;
-					movingTrip.remove(i);
-					i--;
-				}
-				else{
-					stopped = false;
-				}
-			}
-		}
-
-		return stops;
+        double distance = 0.0;
+        for (int i = 0; i < movingTrip.size(); i++) {
+            TripPoint currentPoint = movingTrip.get(i);
+            for(int j = i + 1; j < movingTrip.size(); j++){
+                distance = haversineDistance(currentPoint, movingTrip.get(j));
+                if (distance <= threshold) {
+                    movingTrip.remove(movingTrip.get(j));
+                    stops++;
+                }
+            }
+        }
+        return stops;
 	}
+
+    public static double getTimeDifference(TripPoint point1, TripPoint point2) {
+        // Assuming TripPoint has a field representing time in hours
+        double timeDifference = Math.abs(point1.time - point2.time);
+        return timeDifference;
+    }
 	
 	public static double movingTime(){
-		return ((movingTrip.size() - 1) * 5 - 10) / 60.000;
+        return (totalTime() - ((stops * 5) / 60.0));
 	}
 
 	public static double stoppedTime(){
-		ArrayList<TripPoint> temp1 = getMovingTrip();
-		ArrayList<TripPoint> temp2 = getTrip();
-		return ((temp2.size() * 5 - 10) - ((temp1.size() - 1 * 5 - 10))) / 60;
+        return (totalTime() - movingTime());
 	}
 
 	public static double avgMovingSpeed(){
-		double dist = totalMovingDistance();
-		double time = movingTime();
-
-		return dist/time;
+        return totalDistance() / movingTime();
 	}
 
 	public static ArrayList<TripPoint> getMovingTrip(){
