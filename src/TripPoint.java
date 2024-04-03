@@ -163,36 +163,55 @@ public class TripPoint {
 
 	public static int h1StopDetection(){
 		double displacementThreshold = 0.6; // Threshold in kilometers
-        movingTrip = new ArrayList<>(trip);
+        movingTrip = new ArrayList<>(trip); // add all points from trip to movingTrip
 
-        stops = 0;
+        stops = 0; // reset stops
         for (int i = 1; i < trip.size(); i++) { // loop
-            TripPoint currentPoint = trip.get(i);
-            TripPoint previousPoint = trip.get(i - 1);
-            double distance = haversineDistance(currentPoint, previousPoint);
-            if (distance <= displacementThreshold) {
-                movingTrip.remove(currentPoint);
-                stops++;
+            double distance = haversineDistance(trip.get(i), trip.get(i - 1)); // get distance of point 'i' and point 'i - 1'
+            if (distance <= displacementThreshold) { // compare previous distance to the threshold
+                movingTrip.remove(trip.get(i)); // remove stopped point from moving trip
+                stops++; // add to stops
             }
         }
         return stops;
 	}
 
 	public static int h2StopDetection(){
+    /* 
+    I just realized that the tests say there are more stops even 
+    when the threshold is smaller, so I'm  not sure how that works
+
+    the code I have here is way different from the first one I'll 
+    try to put notations, but in case its indecernable.
+
+    This one uses a nested loop to loop through every point past 
+    current point, this makes it so if any of the points in the entire 
+    list are within a .5km threshold of the current point it is counted 
+    as a stop then removed from the list. In a real world application 
+    this would defiently not work, but I was trying whatever I could
+
+    you should be able to look at previous commits on the github to see 
+    what I was doing before.
+    */ 
+
 		double threshold = 0.5; // Threshold in kilometers
         movingTrip = new ArrayList<>(trip);
 
         stops = 0;
 
         double distance = 0.0;
-        for (int i = 0; i < movingTrip.size(); i++) {
+        for (int i = 0; i < movingTrip.size() - 1; i++) {
             TripPoint currentPoint = movingTrip.get(i);
-            for(int j = i + 1; j < movingTrip.size(); j++){
-                distance = haversineDistance(currentPoint, movingTrip.get(j));
+
+            int j = 1;
+            distance = haversineDistance(currentPoint, movingTrip.get(i + j));
+            while(j < movingTrip.size() - i - 1 && distance <= threshold){
                 if (distance <= threshold) {
-                    movingTrip.remove(movingTrip.get(j));
+                    movingTrip.remove(movingTrip.get(i + j));
                     stops++;
                 }
+                j++;
+                distance = haversineDistance(currentPoint, movingTrip.get(i + j));
             }
         }
         return stops;
@@ -213,7 +232,7 @@ public class TripPoint {
 	}
 
 	public static double avgMovingSpeed(){
-        return totalDistance() / movingTime();
+        return totalDistance() / movingTime(); // test on h1 says it should be 103.7 but I'm getting 103.8 so...
 	}
 
 	public static ArrayList<TripPoint> getMovingTrip(){
