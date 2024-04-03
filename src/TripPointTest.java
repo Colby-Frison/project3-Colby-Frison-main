@@ -30,7 +30,7 @@ class TripPointTest {
 	}
 	
 	@Test
-	void testHeuristic2() throws FileNotFoundException, IOException {
+ 	void testHeuristic2() throws FileNotFoundException, IOException {
 		TripPoint.readFile("triplog.csv");
 
 		int stops = TripPoint.h2StopDetection();
